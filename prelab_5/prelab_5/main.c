@@ -11,8 +11,10 @@ Descripción: contador de 8 bits
  */ 
 
 // Librerias
+#define F_CPU 16000000
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <util/delay.h>
 
 // Se definen variables
 const uint8_t TABLA7SEG[16] = 
@@ -23,6 +25,7 @@ const uint8_t TABLA7SEG[16] =
 
 uint8_t ADC_reader = 0;		// Variable del ADC
 uint8_t dutyC = 191;
+uint16_t angle = 0;
 
 // Prototipo de funciones
 void setup();
@@ -30,6 +33,8 @@ void ADC_conf();
 void display();
 void PWM_conf();
 void up_DutyCycle(uint8_t dutyC);
+void map_servo(uint8_t adc_val);
+void PWM_setAngle(uint16_t angle);
 
 // Main loop
 int main(void)
@@ -40,11 +45,16 @@ int main(void)
 	// Se inicia el loop
 	while (1)
 	{
-		up_DutyCycle(uint8_t dutyC);
+		angle = ((uint32_t)ADC_reader * 2000) / 1023 + 2000; // Mapear a 0-180 grados 
+		PWM_setAngle(angle);
+
 	}
 }
 
 // NON-Interrupt subroutines
+void PWM_setAngle(uint16_t angle) {
+	OCR1A = angle;
+}
 
 // Función para setear
 void setup()
@@ -79,17 +89,13 @@ void setup()
 
 void PWM_conf()
 {
-	TCCR0A = 0;
-	TCCR0A |= (1 << COM0A1) | (1 << COM0A0); // Seteamos modo invertido
-	TCCR0A |= (1 << WGM01) | (1 << WGM00);	// Modo 3 = FAST PWM y TOP
+	TCCR1A = 0;
+	TCCR1A |= (1 << COM1A1) | (1 << COM1A0); // Seteamos modo no invertido
+	TCCR1A |= (1 << WGM13) | (1 << WGM12) | (1 << WGM11);	// Modo 14 = FAST PWM y TOP ICR1
+	ICR1 = 40000;
 	
-	TCCR0B = 0;
-	TCCR0B |= (1 << CS02); // Prescaler de 256
-}
-
-up_DutyCycle(uint8_t dutyC)
-{
-	OCR0A = dutyC;
+	TCCR1B = 0;
+	TCCR1B |= (1 << CS11); // Prescaler de 64
 }
 
 void ADC_conf()
@@ -115,10 +121,8 @@ ISR(ADC_vect)
 		while (ADCSRA & (1 << ADSC));	// Mientras se pueda leer el ADC
 		suma += ADCH;					// Sumar el ADC a una variable
 	}
-	ADC_reader = suma / 8;				// Sacar promedio de esta variable
 	
-	display1 = ADC_reader & 0x0F;				// Subir bits menos significativos del ADC al display1
-	display2 = (ADC_reader >> 4) & 0x0F;		// Subir bits más significativos del ADC al display2
+	ADC_reader = suma / 8;				// Sacar promedio de esta variable
 	
 	ADCSRA	|= (1 << ADSC);				// Leer el ADC
 }
